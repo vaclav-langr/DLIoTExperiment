@@ -1,0 +1,1 @@
+{"train_size_percent": 0.8, "shuffle": true, "normalize": true, "use_label": true, "optimizer": "Adam", "loss": "str", "metrics": ["categorical_accuracy"]}
