@@ -5,6 +5,7 @@ import datetime
 import os
 import json
 from sklearn.preprocessing import LabelEncoder, normalize
+from sklearn.utils.class_weight import compute_class_weight
 import keras
 
 DATA_FOLDER = 'E:\\Downloads\\Experiment\\'
@@ -68,6 +69,12 @@ def normalize_data(train, test):
     return normalized_data[0:len(train)], normalized_data[len(train):]
 
 
+def get_class_weights(trainY, testY):
+    y_integers = np.argmax(np.concatenate((trainY, testY), axis=0), axis=1)
+    class_weights = compute_class_weight('balanced', np.unique(y_integers), y_integers)
+    return dict(enumerate(class_weights))
+
+
 def mlp_model(data, train_size_percent=0.8, shuffle=True, normalize=True, use_label=False):
     if use_label:
         reduce_param = 0
@@ -85,6 +92,8 @@ def mlp_model(data, train_size_percent=0.8, shuffle=True, normalize=True, use_la
     trainX = train_data[:, 0:(train_data.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
     testX = test_data[:, 0:(test_data.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
 
+    class_weights = get_class_weights(trainY, testY)
+
     model = keras.models.Sequential()
     model.add(keras.layers.Dense(512, input_shape=(trainX.shape[1], ), activation='relu'))
     model.add(keras.layers.Dense(512, activation='relu'))
@@ -93,7 +102,7 @@ def mlp_model(data, train_size_percent=0.8, shuffle=True, normalize=True, use_la
     model.add(keras.layers.Dense(512, activation='relu'))
     model.add(keras.layers.Dense(trainY.shape[1], activation='sigmoid'))
 
-    optimizer = keras.optimizers.Adam(lr=0.1)
+    optimizer = keras.optimizers.Adam(lr=0.01)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
     params = {
@@ -115,7 +124,7 @@ def mlp_model(data, train_size_percent=0.8, shuffle=True, normalize=True, use_la
     tb_callback = keras.callbacks.TensorBoard(log_dir=graph_folder, histogram_freq=0,
                                               write_graph=True, write_images=True)
     model.fit(trainX, trainY, epochs=100, batch_size=10000, validation_data=(testX, testY), shuffle=shuffle,
-              callbacks=[tb_callback])
+              callbacks=[tb_callback], class_weight=class_weights)
     model_json = model.to_json()
     with open(graph_folder + '\\model.json', 'w') as json_file:
         json_file.write(model_json)
@@ -142,6 +151,8 @@ def cnn_model(data, train_size_percent=0.8, shuffle=False, normalize=True, use_l
     trainX = trainX.reshape((trainX.shape[0], trainX.shape[1], 1))
     testX = testX.reshape((testX.shape[0], testX.shape[1], 1))
 
+    class_weights = get_class_weights(trainY, testY)
+
     model = keras.models.Sequential()
 
     model.add(keras.layers.Conv1D(64, 8, padding='same', input_shape=(trainX.shape[1], 1),
@@ -153,7 +164,7 @@ def cnn_model(data, train_size_percent=0.8, shuffle=False, normalize=True, use_l
     model.add(keras.layers.Dense(512, activation='relu'))
     model.add(keras.layers.Dense(trainY.shape[1], activation='sigmoid'))
 
-    optimizer = keras.optimizers.Adam(lr=0.1)
+    optimizer = keras.optimizers.Adam(lr=0.01)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
     params = {
@@ -175,7 +186,7 @@ def cnn_model(data, train_size_percent=0.8, shuffle=False, normalize=True, use_l
     tb_callback = keras.callbacks.TensorBoard(log_dir=graph_folder, histogram_freq=0,
                                               write_graph=True, write_images=True)
     model.fit(trainX, trainY, epochs=100, batch_size=10000, validation_data=(testX, testY), callbacks=[tb_callback],
-              shuffle=shuffle)
+              shuffle=shuffle, class_weight=class_weights)
     model_json = model.to_json()
     with open(graph_folder + '\\model.json', 'w') as json_file:
         json_file.write(model_json)
@@ -202,13 +213,15 @@ def lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, use_
     trainX = trainX.reshape((trainX.shape[0], 1, trainX.shape[1]))
     testX = testX.reshape((testX.shape[0], 1, testX.shape[1]))
 
+    class_weights = get_class_weights(trainY, testY)
+
     model = keras.models.Sequential()
     model.add(keras.layers.LSTM(units=128, input_shape=(1, trainX.shape[2]), activation='relu'))
     model.add(keras.layers.Dropout(rate=0.5))
     model.add(keras.layers.Dense(512, activation='relu'))
     model.add(keras.layers.Dense(trainY.shape[1], activation='sigmoid'))
 
-    optimizer = keras.optimizers.Adam(lr=0.1)
+    optimizer = keras.optimizers.Adam(lr=0.01)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
     params = {
@@ -230,7 +243,7 @@ def lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, use_
     tb_callback = keras.callbacks.TensorBoard(log_dir=graph_folder, histogram_freq=0,
                                               write_graph=True, write_images=True)
     model.fit(trainX, trainY, epochs=100, batch_size=10000, validation_data=(testX, testY), callbacks=[tb_callback],
-              shuffle=shuffle)
+              shuffle=shuffle, class_weight=class_weights)
     model_json = model.to_json()
     with open(graph_folder + '\\model.json', 'w') as json_file:
         json_file.write(model_json)
@@ -257,6 +270,8 @@ def cnn_lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, 
     trainX = trainX.reshape((trainX.shape[0], trainX.shape[1], 1))
     testX = testX.reshape((testX.shape[0], testX.shape[1], 1))
 
+    class_weights = get_class_weights(trainY, testY)
+
     model = keras.models.Sequential()
     model.add(keras.layers.Conv1D(64, 8, padding='same', input_shape=(trainX.shape[1], 1),
                                   data_format='channels_first', activation='relu'))
@@ -265,7 +280,7 @@ def cnn_lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, 
     model.add(keras.layers.Dense(512, activation='relu'))
     model.add(keras.layers.Dense(trainY.shape[1], activation='sigmoid'))
 
-    optimizer = keras.optimizers.Adam(lr=0.1)
+    optimizer = keras.optimizers.Adam(lr=0.01)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
     params = {
@@ -287,7 +302,7 @@ def cnn_lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, 
     tb_callback = keras.callbacks.TensorBoard(log_dir=graph_folder, histogram_freq=0,
                                               write_graph=True, write_images=True)
     model.fit(trainX, trainY, epochs=100, batch_size=10000, validation_data=(testX, testY), callbacks=[tb_callback],
-              shuffle=shuffle)
+              shuffle=shuffle, class_weight=class_weights)
     model_json = model.to_json()
     with open(graph_folder + '\\model.json', 'w') as json_file:
         json_file.write(model_json)
