@@ -162,7 +162,7 @@ def cnn_model(data, train_size_percent=0.8, shuffle=False, normalize=True, use_l
         "normalize": normalize,
         "use_label": use_label,
         "optimizer": model.optimizer.__class__.__name__,
-        "loss": model.loss.__class__.__name__,
+        "loss": model.loss,
         "metrics": model.metrics
     }
 
@@ -217,7 +217,7 @@ def lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, use_
         "normalize": normalize,
         "use_label": use_label,
         "optimizer": model.optimizer.__class__.__name__,
-        "loss": model.loss.__class__.__name__,
+        "loss": model.loss,
         "metrics": model.metrics
     }
 
@@ -274,7 +274,7 @@ def cnn_lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, 
         "normalize": normalize,
         "use_label": use_label,
         "optimizer": model.optimizer.__class__.__name__,
-        "loss": model.loss.__class__.__name__,
+        "loss": model.loss,
         "metrics": model.metrics
     }
 
@@ -296,8 +296,8 @@ def cnn_lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, 
 
 if __name__ == "__main__":
     data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
-    mlp_model(np.array(data, copy=True), 0.8, True, True, True)
-    cnn_model(np.array(data, copy=True), 0.8, True, True, True)
-    lstm_model(np.array(data, copy=True), 0.8, True, True, True)
-    cnn_lstm_model(np.array(data, copy=True), 0.8, True, True, True)
+    mlp_model(np.array(data, copy=True), 1, True, True, False)
+    cnn_model(np.array(data, copy=True), 1, True, True, False)
+    lstm_model(np.array(data, copy=True), 1, False, True, False)
+    cnn_lstm_model(np.array(data, copy=True), 1, False, True, False)
     print("Konec")
