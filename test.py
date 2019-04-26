@@ -2,6 +2,7 @@ from keras.models import model_from_json
 import ipaddress
 import numpy as np
 import pandas as pd
+import keras as K
 
 DATA_FOLDER = 'E:\\Downloads\\Experiment\\'
 
@@ -32,8 +33,16 @@ def load_data(data_path, file_names, data_type='ML'):
     return np.concatenate(data, axis=0)
 
 
+def modify_data(data):
+    data[0] = 100
+
+
 if __name__ == '__main__':
-    model = load_model('./Graph/MLP/20190423_065311_naninf/')
-    data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
-    unique, counts = np.unique(data[:, -1], return_counts=True)
-    print(np.asarray((unique, counts)).T)
+    data = [1]
+    modify_data(data)
+    print(data)
+
+    #model = load_model('./Graph/MLP/20190423_065311_naninf/')
+    #data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
+    #unique, counts = np.unique(data[:, -1], return_counts=True)
+    #print(np.asarray((unique, counts)).T)
