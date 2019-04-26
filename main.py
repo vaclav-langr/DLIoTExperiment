@@ -78,8 +78,8 @@ def normalize_data(train, test):
 
 
 def get_class_weights(trainY, testY):
-    y_integers = np.argmax(np.concatenate((trainY, testY), axis=0), axis=1)
-    class_weights = compute_class_weight(None, np.unique(y_integers), y_integers)
+    y_integers = np.concatenate((trainY, testY), axis=0)
+    class_weights = compute_class_weight('balanced', np.unique(y_integers), y_integers)
     return dict(enumerate(class_weights))
 
 
@@ -95,7 +95,7 @@ def generate_mlp_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     try:
         optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
         model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
-        return model
+        return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
 
@@ -116,7 +116,7 @@ def generate_cnn_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     try:
         optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
         model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
-        return model
+        return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
 
@@ -133,7 +133,7 @@ def generate_lstm_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     try:
         optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
         model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
-        return model
+        return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
 
@@ -152,7 +152,7 @@ def generate_cnn_lstm_model(trainX, trainY, testX, testY, optimizer, learning_ra
     try:
         optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
         model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
-        return model
+        return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
 
@@ -197,6 +197,7 @@ def train_model(data,
         np.random.shuffle(train_data)
         np.random.shuffle(test_data)
     trainY, testY = encode_labels(train_data[:, -1], test_data[:, -1])  # Zakodovani labelu ze stringu na int
+    class_weights = get_class_weights(trainY, testY)
     train_data[:, -1], test_data[:, -1] = trainY, testY  # Nahrazeni hodnot v puvodnim poli
     trainY, testY = binarize_labels(trainY, testY)  # Prevod labelu na one-hot kodovani
     if normalize:
@@ -204,9 +205,12 @@ def train_model(data,
     trainX = train_data[:, 0:(train_data.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
     testX = test_data[:, 0:(test_data.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
 
-    class_weights = get_class_weights(trainY, testY)
-
-    model = get_model_generator(model_type)(trainX, trainY, testX, testY, optimizer, learning_rate)
+    model, trainX, trainY, testX, testY = get_model_generator(model_type)(trainX,
+                                                                          trainY,
+                                                                          testX,
+                                                                          testY,
+                                                                          optimizer,
+                                                                          learning_rate)
     params = {
         "train_size_percent": train_size_percent,
         "shuffle": shuffle,
@@ -470,8 +474,8 @@ def cnn_lstm_model(data, train_size_percent=0.8, shuffle=False, normalize=True, 
 
 if __name__ == "__main__":
     data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
-    mlp_model(np.array(data, copy=True), 0.8, True, True, False)
-    cnn_model(np.array(data, copy=True), 0.8, True, True, False)
-    lstm_model(np.array(data, copy=True), 0.8, True, True, False)
-    cnn_lstm_model(np.array(data, copy=True), 0.8, True, True, False)
+    train_model(np.array(data, copy=True), Model.MLP, 0.8, True, True, False, 'Adam', 0.1)
+    train_model(np.array(data, copy=True), Model.CNN, 0.8, True, True, False, 'Adam', 0.1)
+    train_model(np.array(data, copy=True), Model.LSTM, 0.8, True, True, False, 'Adam', 0.1)
+    train_model(np.array(data, copy=True), Model.CNN_LSTM, 0.8, True, True, False, 'Adam', 0.1)
     print("Konec")
