@@ -158,9 +158,14 @@ def duplicate_data(data):
                 coefs[unique[j]] = coefs[unique[j]] + counts[j]
             else:
                 coefs[unique[j]] = counts[j]
-    maximum = float(np.max(list(coefs.values())))
+        '''maximum = float(np.max(list(coefs.values())))
     for key in coefs:
-        coefs[key] = int(np.floor(maximum / float(coefs[key])))
+        coefs[key] = int(np.floor(maximum / float(coefs[key])))'''
+    for key in coefs.keys():
+        if key is 'BENIGN':
+            coefs[key] = 1
+        else:
+            coefs[key] = 4
     for i in range(len(data)):
         repeats = [coefs[label] for label in data[i][1][:, -1]]
         data[i][1] = np.repeat(data[i][1], repeats, axis=0)
@@ -187,6 +192,7 @@ def train_model(data,
     :param bool use_label: Pouzit i label jako vstup
     :param bool duplicate: Pouzit duplikace misto vyvazovani
     :param str optimizer: Zvoleny optimizer
+    :param int epochs: Pocet opakovani trenovani
     :param float learning_rate: Zvoleny learning rate
     """
     if duplicate:
