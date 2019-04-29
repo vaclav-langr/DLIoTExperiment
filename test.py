@@ -38,10 +38,7 @@ def modify_data(data):
 
 
 if __name__ == '__main__':
-    data = [1]
-    modify_data(data)
-    print(data)
-
+    print()
     #model = load_model('./Graph/MLP/20190423_065311_naninf/')
     #data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
     #unique, counts = np.unique(data[:, -1], return_counts=True)

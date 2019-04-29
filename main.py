@@ -4,7 +4,8 @@ import ipaddress
 import datetime
 import os
 import json
-from sklearn.preprocessing import LabelEncoder, normalize
+import sklearn.preprocessing as preprocessing
+from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_class_weight
 import keras
 from enum import Enum
@@ -20,25 +21,13 @@ class Model(Enum):
     CNN_LSTM = 'CNN_LSTM'
 
 
-def split_data(data, train_size_percent=0.8, shuffle=False):
-    train_result = None
-    test_result = None
-    for d in data:
-        train_data_len = int(np.floor(len(d[1]) * train_size_percent))
-        if shuffle:
-            np.random.shuffle(d[1])
+def split_data(data, labels, train_size_percent=0.8, shuffle=False):
+    if shuffle:
+        p = np.random.permutation(len(data))
+        data, labels = data[p], labels[p]
 
-        train_data, test_data = d[1][0:train_data_len], d[1][train_data_len:]
-        if train_result is None:
-            train_result = train_data
-        else:
-            train_result = np.concatenate((train_result, train_data), axis=0)
-
-        if test_result is None:
-            test_result = test_data
-        else:
-            test_result = np.concatenate((test_result, test_data), axis=0)
-    return train_result, test_result
+    train_data_len = int(np.floor(len(data) * train_size_percent))
+    return data[0:train_data_len], labels[0:train_data_len], data[train_data_len:], labels[train_data_len:]
 
 
 def load_data(data_path, file_names, data_type='ML'):
@@ -59,27 +48,18 @@ def load_data(data_path, file_names, data_type='ML'):
     return data
 
 
-def encode_labels(train, test):
+def encode_labels(labels):
     global LABEL_ENCODER
     LABEL_ENCODER = LabelEncoder()
-    LABEL_ENCODER.fit(np.concatenate((train, test)))
-    return LABEL_ENCODER.transform(train), LABEL_ENCODER.transform(test)
+    LABEL_ENCODER.fit(labels)
+    return LABEL_ENCODER.transform(labels)
 
 
-def binarize_labels(trainY, testY):
-    transformed = keras.utils.to_categorical(np.concatenate((trainY, testY)))
-    return transformed[0:len(trainY)], transformed[len(trainY):]
-
-
-def normalize_data(train, test):
-    whole_data = np.concatenate((train, test), axis=0)
-    normalized_data = normalize(whole_data, axis=0, copy=True)
-    return normalized_data[0:len(train)], normalized_data[len(train):]
-
-
-def get_class_weights(trainY, testY):
-    y_integers = np.concatenate((trainY, testY), axis=0)
-    class_weights = compute_class_weight('balanced', np.unique(y_integers), y_integers)
+def get_class_weights(labels, balance=True):
+    if balance:
+        class_weights = compute_class_weight('balanced', np.unique(labels), labels)
+    else:
+        class_weights = compute_class_weight(None, np.unique(labels), labels)
     return dict(enumerate(class_weights))
 
 
@@ -169,41 +149,62 @@ def get_model_generator(model_type):
     raise ValueError(f'Model type {model_type} not found!')
 
 
+def duplicate_data(data):
+    coefs = {}
+    for i in range(len(data)):
+        unique, counts = np.unique(data[i][1][:, -1], return_counts=True)
+        for j in range(len(unique)):
+            if unique[j] in coefs:
+                coefs[unique[j]] = coefs[unique[j]] + counts[j]
+            else:
+                coefs[unique[j]] = counts[j]
+    maximum = float(np.max(list(coefs.values())))
+    for key in coefs:
+        coefs[key] = int(np.floor(maximum / float(coefs[key])))
+    for i in range(len(data)):
+        repeats = [coefs[label] for label in data[i][1][:, -1]]
+        data[i][1] = np.repeat(data[i][1], repeats, axis=0)
+    return data
+
+
 def train_model(data,
                 model_type,
                 train_size_percent=0.8,
                 shuffle=True,
                 normalize=True,
                 use_label=False,
+                duplicate=True,
                 optimizer='Adam',
-                learning_rate=0.1):
+                learning_rate=0.1,
+                epochs=100):
     """
     Funkce k natrenovani a testovani zvoleneho modelu
-    :param dict data: Data k trenovani a testovani modelu
+    :param ndarray data: Data k trenovani a testovani modelu, list tuplu ve tvaru (nazev souboru, data)
     :param Model model_type: Nazev modelu
     :param float train_size_percent: Velikost trenovacich dat
     :param bool shuffle: Michani dat
     :param bool normalize: Normalizace dat
     :param bool use_label: Pouzit i label jako vstup
+    :param bool duplicate: Pouzit duplikace misto vyvazovani
     :param str optimizer: Zvoleny optimizer
     :param float learning_rate: Zvoleny learning rate
     """
+    if duplicate:
+        data = duplicate_data(data)
     if use_label:
         reduce_param = 0
     else:
         reduce_param = 1
-    train_data, test_data = split_data(data, train_size_percent, shuffle)  # Rozdeleni dat na trenovaci a testovaci
-    if shuffle:
-        np.random.shuffle(train_data)
-        np.random.shuffle(test_data)
-    trainY, testY = encode_labels(train_data[:, -1], test_data[:, -1])  # Zakodovani labelu ze stringu na int
-    class_weights = get_class_weights(trainY, testY)
-    train_data[:, -1], test_data[:, -1] = trainY, testY  # Nahrazeni hodnot v puvodnim poli
-    trainY, testY = binarize_labels(trainY, testY)  # Prevod labelu na one-hot kodovani
+    data = np.concatenate(tuple([d[1] for d in data]), axis=0)
+    Y = encode_labels(data[:, -1])  # Zakodovani labelu ze stringu na int
+    class_weights = get_class_weights(Y, not duplicate)
+    data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
     if normalize:
-        train_data, test_data = normalize_data(train_data, test_data)  # Normalizace dat
-    trainX = train_data[:, 0:(train_data.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
-    testX = test_data[:, 0:(test_data.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
+        data = preprocessing.normalize(data, axis=0, copy=False)  # Normalizace dat
+    Y = keras.utils.to_categorical(Y)  # Prevod labelu na one-hot kodovani
+    trainX, trainY, testX, testY = split_data(data, Y, train_size_percent=0.8, shuffle=shuffle)
+    trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
+    testX = testX[:, 0:(testX.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
 
     model, trainX, trainY, testX, testY = get_model_generator(model_type)(trainX,
                                                                           trainY,
@@ -216,6 +217,7 @@ def train_model(data,
         "shuffle": shuffle,
         "normalize": normalize,
         "use_label": use_label,
+        "duplication": duplicate,
         "optimizer": optimizer,
         "optimizer_learning_rate": learning_rate,
         "loss": model.loss,
@@ -230,7 +232,7 @@ def train_model(data,
     keras.utils.plot_model(model, to_file=graph_folder + 'model.png', show_shapes=True)
     tb_callback = keras.callbacks.TensorBoard(log_dir=graph_folder, histogram_freq=0,
                                               write_graph=True, write_images=True)
-    model.fit(trainX, trainY, epochs=100, batch_size=10000, validation_data=(testX, testY), shuffle=shuffle,
+    model.fit(trainX, trainY, epochs=epochs, batch_size=10000, validation_data=(testX, testY), shuffle=shuffle,
               callbacks=[tb_callback], class_weight=class_weights)
     model_json = model.to_json()
     with open(graph_folder + 'model.json', 'w') as json_file:
@@ -239,9 +241,49 @@ def train_model(data,
 
 
 if __name__ == "__main__":
+    import gc
     data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
-    train_model(np.array(data, copy=True), Model.MLP, 0.8, True, True, False, 'Adam', 0.1)
-    train_model(np.array(data, copy=True), Model.CNN, 0.8, True, True, False, 'Adam', 0.1)
-    train_model(np.array(data, copy=True), Model.LSTM, 0.8, True, True, False, 'Adam', 0.1)
-    train_model(np.array(data, copy=True), Model.CNN_LSTM, 0.8, True, True, False, 'Adam', 0.1)
+    train_model(data=np.array(data, copy=False),
+                model_type=Model.MLP,
+                train_size_percent=0.8,
+                shuffle=True,
+                normalize=False,
+                use_label=False,
+                duplicate=True,
+                optimizer='Adam',
+                learning_rate=0.1,
+                epochs=10)
+    gc.collect()
+    train_model(data=np.array(data, copy=False),
+                model_type=Model.CNN,
+                train_size_percent=0.8,
+                shuffle=True,
+                normalize=False,
+                use_label=False,
+                duplicate=True,
+                optimizer='Adam',
+                learning_rate=0.1,
+                epochs=10)
+    gc.collect()
+    train_model(data=np.array(data, copy=False),
+                model_type=Model.LSTM,
+                train_size_percent=0.8,
+                shuffle=True,
+                normalize=False,
+                use_label=False,
+                duplicate=True,
+                optimizer='Adam',
+                learning_rate=0.1,
+                epochs=10)
+    gc.collect()
+    train_model(data=np.array(data, copy=False),
+                model_type=Model.CNN_LSTM,
+                train_size_percent=0.8,
+                shuffle=True,
+                normalize=False,
+                use_label=False,
+                duplicate=True,
+                optimizer='Adam',
+                learning_rate=0.1,
+                epochs=10)
     print("Konec")
