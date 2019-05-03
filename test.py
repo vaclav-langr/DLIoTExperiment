@@ -2,7 +2,7 @@ from keras.models import model_from_json
 import ipaddress
 import numpy as np
 import pandas as pd
-import keras as K
+import keras
 
 DATA_FOLDER = 'E:\\Downloads\\Experiment\\'
 
@@ -38,6 +38,20 @@ def modify_data(data):
 
 
 if __name__ == '__main__':
+    x = keras.layers.Input(shape=(82,))
+    y = keras.layers.Dense(512, use_bias=True, activation='tanh',
+                                 kernel_initializer='random_uniform', bias_initializer='random_uniform')(x)
+    y = keras.layers.Dense(512, use_bias=True, activation='tanh',
+                                 kernel_initializer='random_uniform', bias_initializer='random_uniform')(y)
+    y = keras.layers.Dense(512, use_bias=True, activation='tanh',
+                                 kernel_initializer='random_uniform', bias_initializer='random_uniform')(y)
+    y = keras.layers.Dropout(rate=0.5)(y)
+    y = keras.layers.Dense(512, use_bias=True, activation='tanh',
+                                 kernel_initializer='random_uniform', bias_initializer='random_uniform')(y)
+    y = keras.layers.Dense(2, activation='sigmoid', use_bias=True,
+                                 kernel_initializer='random_uniform', bias_initializer='random_uniform')(y)
+    model = keras.models.Model(x, y)
+    keras.utils.plot_model(model, show_shapes=True)
     print()
     #model = load_model('./Graph/MLP/20190423_065311_naninf/')
     #data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')

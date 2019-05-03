@@ -64,22 +64,25 @@ def get_class_weights(labels, balance=True):
 
 
 def generate_mlp_model(trainX, trainY, testX, testY, optimizer, learning_rate):
-    model = keras.models.Sequential()
-    model.add(keras.layers.Dense(512, input_shape=(trainX.shape[1],), use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dense(512, use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dense(512, use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dropout(rate=0.5))
-    model.add(keras.layers.Dense(512, use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dense(1, activation='sigmoid', use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
+    output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
+
+    net_input = keras.layers.Input(shape=(trainX.shape[1],))
+    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+                                    bias_initializer='random_uniform')(net_input)
+    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+                                    bias_initializer='random_uniform')(net_output)
+    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+                                    bias_initializer='random_uniform')(net_output)
+    net_output = keras.layers.Dropout(rate=0.5)(net_output)
+    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+                                    bias_initializer='random_uniform')(net_output)
+    net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
+                                    kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
+    model = keras.models.Model(net_input, net_output)
 
     try:
         optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy', 'accuracy'])
+        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy', 'accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -89,23 +92,27 @@ def generate_cnn_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     trainX = trainX.reshape((trainX.shape[0], trainX.shape[1], 1))
     testX = testX.reshape((testX.shape[0], testX.shape[1], 1))
 
-    model = keras.models.Sequential()
-    model.add(keras.layers.Conv1D(64, 8, padding='same', input_shape=(trainX.shape[1], 1), activation='relu',
-                                  data_format='channels_first', use_bias=True,
-                                  kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Conv1D(64, 8, padding='same', data_format='channels_first',
-                                  use_bias=True, kernel_initializer='random_uniform',
-                                  bias_initializer='random_uniform'))
-    model.add(keras.layers.MaxPooling1D(padding='same', data_format='channels_first'))
-    model.add(keras.layers.Flatten())
-    model.add(keras.layers.Dropout(rate=0.5))
-    model.add(keras.layers.Dense(512, use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dense(1, activation='sigmoid', use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
+    output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
+
+    net_input = keras.layers.Input(shape=(trainX.shape[1], 1))
+    net_output = keras.layers.Conv1D(64, 8, padding='same', activation='relu', data_format='channels_first',
+                                     use_bias=True, kernel_initializer='random_uniform',
+                                     bias_initializer='random_uniform')(net_input)
+    net_output = keras.layers.Conv1D(64, 8, padding='same', data_format='channels_first', activation='relu',
+                                     use_bias=True, kernel_initializer='random_uniform',
+                                     bias_initializer='random_uniform')(net_output)
+    net_output = keras.layers.MaxPooling1D(padding='same', data_format='channels_first')(net_output)
+    net_output = keras.layers.Flatten()(net_output)
+    net_output = keras.layers.Dropout(rate=0.5)(net_output)
+    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+                                    bias_initializer='random_uniform')(net_output)
+    net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
+                                    kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
+    model = keras.models.Model(net_input, net_output)
+
     try:
         optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy', 'accuracy'])
+        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy', 'accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -115,17 +122,21 @@ def generate_lstm_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     trainX = trainX.reshape((trainX.shape[0], 1, trainX.shape[1]))
     testX = testX.reshape((testX.shape[0], 1, testX.shape[1]))
 
-    model = keras.models.Sequential()
-    model.add(keras.layers.LSTM(units=128, input_shape=(1, trainX.shape[2]), use_bias=True,
-                                kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dropout(rate=0.5))
-    model.add(keras.layers.Dense(512, use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dense(1, activation='sigmoid', use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
+    output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
+
+    net_input = keras.layers.Input(shape=(1, trainX.shape[2]))
+    net_output = keras.layers.LSTM(units=128, use_bias=True, kernel_initializer='random_uniform',
+                                   bias_initializer='random_uniform')(net_input)
+    net_output = keras.layers.Dropout(rate=0.5)(net_output)
+    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+                                    bias_initializer='random_uniform')(net_output)
+    net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
+                                    kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
+    model = keras.models.Model(net_input, net_output)
+
     try:
         optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy', 'accuracy'])
+        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy', 'accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -135,20 +146,24 @@ def generate_cnn_lstm_model(trainX, trainY, testX, testY, optimizer, learning_ra
     trainX = trainX.reshape((trainX.shape[0], trainX.shape[1], 1))
     testX = testX.reshape((testX.shape[0], testX.shape[1], 1))
 
-    model = keras.models.Sequential()
-    model.add(keras.layers.Conv1D(64, 8, padding='same', input_shape=(trainX.shape[1], 1), activation='relu',
-                                  data_format='channels_first', use_bias=True,
-                                  kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.LSTM(units=128, use_bias=True,
-                                kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dropout(rate=0.5))
-    model.add(keras.layers.Dense(512, use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
-    model.add(keras.layers.Dense(1, activation='sigmoid', use_bias=True,
-                                 kernel_initializer='random_uniform', bias_initializer='random_uniform'))
+    output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
+
+    net_input = keras.layers.Input(shape=(trainX.shape[1], 1))
+    net_output = keras.layers.Conv1D(64, 8, padding='same', activation='relu', data_format='channels_first',
+                                     use_bias=True, kernel_initializer='random_uniform',
+                                     bias_initializer='random_uniform')(net_input)
+    net_output = keras.layers.LSTM(units=128, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+                                   bias_initializer='random_uniform')(net_output)
+    net_output = keras.layers.Dropout(rate=0.5)(net_output)
+    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+                                    bias_initializer='random_uniform')(net_output)
+    net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
+                                    kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
+    model = keras.models.Model(net_input, net_output)
+
     try:
         optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy', 'accuracy'])
+        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy', 'accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -228,7 +243,7 @@ def train_model(data,
         std_scaler = preprocessing.StandardScaler().fit(data)
         data = std_scaler.transform(data)
         '''data = preprocessing.normalize(data, axis=0, copy=False)'''  # Normalizace dat
-    #Y = keras.utils.to_categorical(Y)  # Prevod labelu na one-hot kodovani
+    Y = keras.utils.to_categorical(Y)  # Prevod labelu na one-hot kodovani
     trainX, trainY, testX, testY = split_data(data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
     trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
     testX = testX[:, 0:(testX.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
@@ -272,53 +287,49 @@ def train_model(data,
 
 
 if __name__ == "__main__":
-    import gc
     data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
     train_model(data=np.array(data, copy=False),
                 model_type=Model.MLP,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=False,
+                normalize=True,
                 use_label=False,
                 duplicate=True,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
-                epochs=100)
-    gc.collect()
+                epochs=50)
     train_model(data=np.array(data, copy=False),
                 model_type=Model.CNN,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=False,
+                normalize=True,
                 use_label=False,
                 duplicate=True,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
-                epochs=100)
-    gc.collect()
+                epochs=50)
     train_model(data=np.array(data, copy=False),
                 model_type=Model.LSTM,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=False,
+                normalize=True,
                 use_label=False,
                 duplicate=True,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
-                epochs=100)
-    gc.collect()
+                epochs=50)
     train_model(data=np.array(data, copy=False),
                 model_type=Model.CNN_LSTM,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=False,
+                normalize=True,
                 use_label=False,
                 duplicate=True,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
-                epochs=100)
+                epochs=50)
     print("Konec")
