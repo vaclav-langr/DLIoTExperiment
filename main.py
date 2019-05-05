@@ -67,14 +67,14 @@ def generate_mlp_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
 
     net_input = keras.layers.Input(shape=(trainX.shape[1],))
-    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
                                     bias_initializer='random_uniform')(net_input)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
                                     bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
                                     bias_initializer='random_uniform')(net_output)
     net_output = keras.layers.Dropout(rate=0.5)(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
                                     bias_initializer='random_uniform')(net_output)
     net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
                                     kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
@@ -104,7 +104,7 @@ def generate_cnn_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     net_output = keras.layers.MaxPooling1D(padding='same', data_format='channels_first')(net_output)
     net_output = keras.layers.Flatten()(net_output)
     net_output = keras.layers.Dropout(rate=0.5)(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
                                     bias_initializer='random_uniform')(net_output)
     net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
                                     kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
@@ -125,10 +125,10 @@ def generate_lstm_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
 
     net_input = keras.layers.Input(shape=(1, trainX.shape[2]))
-    net_output = keras.layers.LSTM(units=128, use_bias=True, kernel_initializer='random_uniform',
+    net_output = keras.layers.LSTM(units=128, activation='relu', use_bias=True, kernel_initializer='random_uniform',
                                    bias_initializer='random_uniform')(net_input)
     net_output = keras.layers.Dropout(rate=0.5)(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
                                     bias_initializer='random_uniform')(net_output)
     net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
                                     kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
@@ -152,10 +152,10 @@ def generate_cnn_lstm_model(trainX, trainY, testX, testY, optimizer, learning_ra
     net_output = keras.layers.Conv1D(64, 8, padding='same', activation='relu', data_format='channels_first',
                                      use_bias=True, kernel_initializer='random_uniform',
                                      bias_initializer='random_uniform')(net_input)
-    net_output = keras.layers.LSTM(units=128, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+    net_output = keras.layers.LSTM(units=128, use_bias=True, activation='relu', kernel_initializer='random_uniform',
                                    bias_initializer='random_uniform')(net_output)
     net_output = keras.layers.Dropout(rate=0.5)(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='tanh', kernel_initializer='random_uniform',
+    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
                                     bias_initializer='random_uniform')(net_output)
     net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
                                     kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
