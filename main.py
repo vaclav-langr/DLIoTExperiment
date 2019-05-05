@@ -181,14 +181,17 @@ def get_model_generator(model_type):
     raise ValueError(f'Model type {model_type} not found!')
 
 
-def duplicate_data(data):
+def duplicate_data(data, duplicate_coef=None):
     coefs = {}
     unique, counts = np.unique(data[:, -1], return_counts=True)
     for j in range(len(unique)):
         coefs[unique[j]] = counts[j]
     maximum = float(np.max(list(coefs.values())))
     for key in coefs:
-        coefs[key] = int(np.floor(maximum / float(coefs[key])))
+        if duplicate_coef is None:
+            coefs[key] = int(np.floor(maximum / float(coefs[key])))
+        else:
+            coefs[key] = 1 if coefs[key] == maximum else duplicate_coef
     repeats = [coefs[label] for label in data[:, -1]]
     data = np.repeat(data, repeats, axis=0)
     return data
@@ -209,6 +212,8 @@ def train_model(data,
                 normalize=True,
                 use_label=False,
                 duplicate=True,
+                duplicate_coef=None,
+                use_weights=False,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
@@ -222,6 +227,8 @@ def train_model(data,
     :param bool normalize: Normalizace dat
     :param bool use_label: Pouzit i label jako vstup
     :param bool duplicate: Pouzit duplikace misto vyvazovani
+    :param int duplicate_coef: Kolikrat se maji zopakovat nevybalancovane tridy, None - automaticky pocet
+    :param bool use_weights: Pouzit vahy pro tridy
     :param bool simplify: Zjednoduseni labelu na 2 tridy, attack a normal
     :param str optimizer: Zvoleny optimizer
     :param int epochs: Pocet opakovani trenovani
@@ -231,18 +238,18 @@ def train_model(data,
     if simplify:
         data[:, -1] = simplify_labels(data[:, -1])
     if duplicate:
-        data = duplicate_data(data)
+        data = duplicate_data(data, duplicate_coef)
     if use_label:
         reduce_param = 0
     else:
         reduce_param = 1
     Y = encode_labels(data[:, -1])  # Zakodovani labelu ze stringu na int
-    class_weights = get_class_weights(Y, not duplicate)
+    class_weights = get_class_weights(Y, use_weights)
     data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
     if normalize:
+        # Normalizace dat
         std_scaler = preprocessing.StandardScaler().fit(data)
         data = std_scaler.transform(data)
-        '''data = preprocessing.normalize(data, axis=0, copy=False)'''  # Normalizace dat
     Y = keras.utils.to_categorical(Y)  # Prevod labelu na one-hot kodovani
     trainX, trainY, testX, testY = split_data(data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
     trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
@@ -260,6 +267,7 @@ def train_model(data,
         "normalize": normalize,
         "use_label": use_label,
         "duplication": duplicate,
+        "use_weights": use_weights,
         "simplify": simplify,
         "optimizer": optimizer,
         "optimizer_learning_rate": learning_rate,
@@ -295,6 +303,8 @@ if __name__ == "__main__":
                 normalize=True,
                 use_label=False,
                 duplicate=True,
+                duplicate_coef=None,
+                use_weights=False,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
@@ -306,6 +316,8 @@ if __name__ == "__main__":
                 normalize=True,
                 use_label=False,
                 duplicate=True,
+                duplicate_coef=None,
+                use_weights=False,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
@@ -317,6 +329,8 @@ if __name__ == "__main__":
                 normalize=True,
                 use_label=False,
                 duplicate=True,
+                duplicate_coef=None,
+                use_weights=False,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
@@ -328,6 +342,8 @@ if __name__ == "__main__":
                 normalize=True,
                 use_label=False,
                 duplicate=True,
+                duplicate_coef=None,
+                use_weights=False,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
