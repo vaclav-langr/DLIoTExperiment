@@ -205,6 +205,11 @@ def simplify_labels(labels):
     return labels
 
 
+def normalize_data(data):
+    std_scaler = preprocessing.StandardScaler().fit(data)
+    return std_scaler.transform(data)
+
+
 def train_model(data,
                 model_type,
                 train_size_percent=0.8,
@@ -237,6 +242,8 @@ def train_model(data,
     data = np.concatenate(tuple([d[1] for d in data]), axis=0)
     if simplify:
         data[:, -1] = simplify_labels(data[:, -1])
+    if normalize:
+        data[:, 0:(data.shape[1] - 1)] = normalize_data(data[:, 0:(data.shape[1] - 1)])  # Normalizace dat
     if duplicate:
         data = duplicate_data(data, duplicate_coef)
     if use_label:
@@ -246,10 +253,6 @@ def train_model(data,
     Y = encode_labels(data[:, -1])  # Zakodovani labelu ze stringu na int
     class_weights = get_class_weights(Y, use_weights)
     data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
-    if normalize:
-        # Normalizace dat
-        std_scaler = preprocessing.StandardScaler().fit(data)
-        data = std_scaler.transform(data)
     Y = keras.utils.to_categorical(Y)  # Prevod labelu na one-hot kodovani
     trainX, trainY, testX, testY = split_data(data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
     trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
