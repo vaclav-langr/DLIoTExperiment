@@ -5,8 +5,12 @@ import datetime
 import os
 import json
 import sklearn.preprocessing as preprocessing
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_class_weight
+from sklearn import svm
 import keras
 from enum import Enum
 
@@ -297,17 +301,60 @@ def train_model(data,
     model.save_weights(graph_folder + 'model.h5')
 
 
+def svm_model(data,
+              train_size_percent=0.8,
+              shuffle=True,
+              normalize=True,
+              use_label=False,
+              duplicate=True,
+              duplicate_coef=None,
+              use_weights=False,
+              simplify=True):
+    data = np.concatenate(tuple([d[1] for d in data]), axis=0)
+    if simplify:
+        data[:, -1] = simplify_labels(data[:, -1])
+    if normalize:
+        data[:, 0:(data.shape[1] - 1)] = normalize_data(data[:, 0:(data.shape[1] - 1)])  # Normalizace dat
+    if duplicate:
+        data = duplicate_data(data, duplicate_coef)
+    if use_label:
+        reduce_param = 0
+    else:
+        reduce_param = 1
+    Y = encode_labels(data[:, -1])  # Zakodovani labelu ze stringu na int
+    class_weights = get_class_weights(Y, use_weights)
+    data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
+    trainX, trainY, testX, testY = split_data(data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
+    trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
+    testX = testX[:, 0:(testX.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
+    clf = svm.SVC(gamma='scale', decision_function_shape='ovo', class_weight=class_weights, verbose=True, max_iter=10000)
+    print('Starting training')
+    clf.fit(trainX, trainY)
+    print('Trained')
+    s = clf.score(testX, testY)
+    print(f'Test result: {s}')
+
+
 if __name__ == "__main__":
     data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
+    svm_model(data=np.array(data, copy=False),
+              train_size_percent=0.8,
+              shuffle=True,
+              normalize=True,
+              use_label=False,
+              duplicate=False,
+              duplicate_coef=None,
+              use_weights=False,
+              simplify=True)
     train_model(data=np.array(data, copy=False),
                 model_type=Model.MLP,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=True,
+                normalize=False,
                 use_label=False,
-                duplicate=True,
+                duplicate=False,
                 duplicate_coef=None,
-                use_weights=False,
+                use_weights=True,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
@@ -316,11 +363,11 @@ if __name__ == "__main__":
                 model_type=Model.CNN,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=True,
+                normalize=False,
                 use_label=False,
-                duplicate=True,
+                duplicate=False,
                 duplicate_coef=None,
-                use_weights=False,
+                use_weights=True,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
@@ -329,11 +376,11 @@ if __name__ == "__main__":
                 model_type=Model.LSTM,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=True,
+                normalize=False,
                 use_label=False,
-                duplicate=True,
+                duplicate=False,
                 duplicate_coef=None,
-                use_weights=False,
+                use_weights=True,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
@@ -342,11 +389,11 @@ if __name__ == "__main__":
                 model_type=Model.CNN_LSTM,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=True,
+                normalize=False,
                 use_label=False,
-                duplicate=True,
+                duplicate=False,
                 duplicate_coef=None,
-                use_weights=False,
+                use_weights=True,
                 simplify=True,
                 optimizer='Adam',
                 learning_rate=0.1,
