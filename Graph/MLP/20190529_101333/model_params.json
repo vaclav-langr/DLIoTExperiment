@@ -1,0 +1,1 @@
+{"train_size_percent": 0.8, "shuffle": true, "normalize": true, "use_label": true, "duplication": true, "use_weights": false, "simplify": true, "optimizer": "Adam", "optimizer_learning_rate": 0.1, "loss": "categorical_crossentropy", "metrics": ["categorical_accuracy"]}

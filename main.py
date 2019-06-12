@@ -3,40 +3,51 @@ import numpy as np
 import ipaddress
 import datetime
 import os
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 import json
 import sklearn.preprocessing as preprocessing
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn import svm
-import keras
+from sklearn.ensemble import RandomForestClassifier
+from keras.layers import Input, Dense, Dropout, Conv1D, MaxPooling1D, Flatten, LSTM
+from keras.models import Model
+from keras.utils import to_categorical, plot_model
+from keras.callbacks import TensorBoard
+from keras import optimizers
 from enum import Enum
 
 DATA_FOLDER = 'E:\\Downloads\\Experiment\\'
 LABEL_ENCODER = None
 
 
-class Model(Enum):
+class ModelType(Enum):
     MLP = 'MLP'
     CNN = 'CNN'
     LSTM = 'LSTM'
     CNN_LSTM = 'CNN_LSTM'
 
 
-def split_data(data, labels, train_size_percent=0.8, shuffle=False):
+def split_data(input_data, labels, train_size_percent=0.8, shuffle=False):
     if shuffle:
-        p = np.random.permutation(len(data))
-        data, labels = data[p], labels[p]
+        p = np.random.permutation(len(input_data))
+        input_data, labels = input_data[p], labels[p]
+    train_data_len = int(np.floor(len(input_data) * train_size_percent))
+    return input_data[0:train_data_len], labels[0:train_data_len], input_data[train_data_len:], labels[train_data_len:]
 
-    train_data_len = int(np.floor(len(data) * train_size_percent))
-    return data[0:train_data_len], labels[0:train_data_len], data[train_data_len:], labels[train_data_len:]
+
+def check_data(input_data):
+    for t in input_data:
+        d = t[1]
+        for i in range(d.shape[0]):
+            sample = np.array(d[i, 0:(d.shape[1] - 1)], dtype=np.float64)
+            if np.isnan(sample).any() or np.isinf(sample).any():
+                print('Chyba')
 
 
 def load_data(data_path, file_names, data_type='ML'):
-    data = []
-    filter = [0, 6]
+    result = []
+    filter_data = [0, 6]
     for name in file_names:
         d = pd.read_csv(data_path + data_type + '\\' + name, sep=',', header=0,
                         dtype={"Flow Bytes/s": str, " Flow Packets/s": str}, encoding='latin1')
@@ -44,12 +55,14 @@ def load_data(data_path, file_names, data_type='ML'):
         d[" Flow Packets/s"] = np.float64(d[" Flow Packets/s"])
         d = d.to_numpy()
         if data_type is 'GL':
-            d = d[:, [i for i in range(1, d.shape[1]) if i not in filter]]
+            d = d[:, [i for i in range(1, d.shape[1]) if i not in filter_data]]
             d[:, [0]] = [[int(ipaddress.IPv4Address(ipstr[0]))] for ipstr in d[:, [0]]]
             d[:, [2]] = [[int(ipaddress.IPv4Address(ipstr[0]))] for ipstr in d[:, [2]]]
-        d[:, 0:(d.shape[1] - 1)] = np.nan_to_num(d[:, 0:(d.shape[1] - 1)].astype('float64'), copy=True)
-        data.append((name, d))
-    return data
+        d[:, 0:(d.shape[1] - 1)] = np.array(d[:, 0:(d.shape[1] - 1)], dtype=np.float32)
+        for i in range(d.shape[0]):
+            d[i, 0:(d.shape[1] - 1)] = np.nan_to_num(np.array(d[i, 0:(d.shape[1] - 1)], dtype=np.float32), copy=True)
+        result.append((name, d))
+    return result
 
 
 def encode_labels(labels):
@@ -70,23 +83,23 @@ def get_class_weights(labels, balance=True):
 def generate_mlp_model(trainX, trainY, testX, testY, optimizer, learning_rate):
     output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
 
-    net_input = keras.layers.Input(shape=(trainX.shape[1],))
-    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
-                                    bias_initializer='random_uniform')(net_input)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
-                                    bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
-                                    bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.Dropout(rate=0.5)(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
-                                    bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
-                                    kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
-    model = keras.models.Model(net_input, net_output)
+    net_input = Input(shape=(trainX.shape[1],))
+    net_output = Dense(512, use_bias=True, activation=None,
+                       kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_input)
+    net_output = Dense(512, use_bias=True, activation=None,
+                       kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_output)
+    net_output = Dense(512, use_bias=True, activation=None,
+                       kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_output)
+    net_output = Dropout(rate=0.5)(net_output)
+    net_output = Dense(512, use_bias=True, activation=None,
+                       kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_output)
+    net_output = Dense(output_shape, activation='sigmoid', use_bias=True,
+                       kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_output)
+    model = Model(net_input, net_output)
 
     try:
-        optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy', 'accuracy'])
+        optimizer_var = getattr(optimizers, optimizer)(lr=learning_rate)
+        model.compile(optimizer=optimizer_var, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -98,25 +111,23 @@ def generate_cnn_model(trainX, trainY, testX, testY, optimizer, learning_rate):
 
     output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
 
-    net_input = keras.layers.Input(shape=(trainX.shape[1], 1))
-    net_output = keras.layers.Conv1D(64, 8, padding='same', activation='relu', data_format='channels_first',
-                                     use_bias=True, kernel_initializer='random_uniform',
-                                     bias_initializer='random_uniform')(net_input)
-    net_output = keras.layers.Conv1D(64, 8, padding='same', data_format='channels_first', activation='relu',
-                                     use_bias=True, kernel_initializer='random_uniform',
-                                     bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.MaxPooling1D(padding='same', data_format='channels_first')(net_output)
-    net_output = keras.layers.Flatten()(net_output)
-    net_output = keras.layers.Dropout(rate=0.5)(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
-                                    bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
-                                    kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
-    model = keras.models.Model(net_input, net_output)
+    net_input = Input(shape=(trainX.shape[1], 1))
+    net_output = Conv1D(64, 8, padding='same', activation='relu', data_format='channels_first',
+                        use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_input)
+    net_output = Conv1D(64, 8, padding='same', data_format='channels_first', activation='relu',
+                        use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_output)
+    net_output = MaxPooling1D(padding='same', data_format='channels_first')(net_output)
+    net_output = Flatten()(net_output)
+    net_output = Dropout(rate=0.5)(net_output)
+    net_output = Dense(512, use_bias=True, activation=None, kernel_initializer='glorot_uniform',
+                       bias_initializer='zeros')(net_output)
+    net_output = Dense(output_shape, activation='sigmoid', use_bias=True,
+                       kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_output)
+    model = Model(net_input, net_output)
 
     try:
-        optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy', 'accuracy'])
+        optimizer = getattr(optimizers, optimizer)(lr=learning_rate)
+        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -128,19 +139,19 @@ def generate_lstm_model(trainX, trainY, testX, testY, optimizer, learning_rate):
 
     output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
 
-    net_input = keras.layers.Input(shape=(1, trainX.shape[2]))
-    net_output = keras.layers.LSTM(units=128, activation='relu', use_bias=True, kernel_initializer='random_uniform',
-                                   bias_initializer='random_uniform')(net_input)
-    net_output = keras.layers.Dropout(rate=0.5)(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
-                                    bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
-                                    kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
-    model = keras.models.Model(net_input, net_output)
+    net_input = Input(shape=(1, trainX.shape[2]))
+    net_output = LSTM(units=128, activation='tanh', use_bias=True, kernel_initializer='glorot_uniform',
+                      bias_initializer='zeros')(net_input)
+    net_output = Dropout(rate=0.5)(net_output)
+    net_output = Dense(512, use_bias=True, activation=None, kernel_initializer='glorot_uniform',
+                       bias_initializer='zeros')(net_output)
+    net_output = Dense(output_shape, activation='sigmoid', use_bias=True,
+                       kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_output)
+    model = Model(net_input, net_output)
 
     try:
-        optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy', 'accuracy'])
+        optimizer = getattr(optimizers, optimizer)(lr=learning_rate)
+        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -152,42 +163,41 @@ def generate_cnn_lstm_model(trainX, trainY, testX, testY, optimizer, learning_ra
 
     output_shape = trainY.shape[1] if len(trainY.shape) > 1 else 1
 
-    net_input = keras.layers.Input(shape=(trainX.shape[1], 1))
-    net_output = keras.layers.Conv1D(64, 8, padding='same', activation='relu', data_format='channels_first',
-                                     use_bias=True, kernel_initializer='random_uniform',
-                                     bias_initializer='random_uniform')(net_input)
-    net_output = keras.layers.LSTM(units=128, use_bias=True, activation='relu', kernel_initializer='random_uniform',
-                                   bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.Dropout(rate=0.5)(net_output)
-    net_output = keras.layers.Dense(512, use_bias=True, activation='relu', kernel_initializer='random_uniform',
-                                    bias_initializer='random_uniform')(net_output)
-    net_output = keras.layers.Dense(output_shape, activation='sigmoid', use_bias=True,
-                                    kernel_initializer='random_uniform', bias_initializer='random_uniform')(net_output)
-    model = keras.models.Model(net_input, net_output)
+    net_input = Input(shape=(trainX.shape[1], 1))
+    net_output = Conv1D(64, 8, padding='same', activation='relu', data_format='channels_first',
+                        use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_input)
+    net_output = LSTM(units=128, use_bias=True, activation='tanh', kernel_initializer='glorot_uniform',
+                      bias_initializer='zeros')(net_output)
+    net_output = Dropout(rate=0.5)(net_output)
+    net_output = Dense(512, use_bias=True, activation=None, kernel_initializer='glorot_uniform',
+                       bias_initializer='zeros')(net_output)
+    net_output = Dense(output_shape, activation='sigmoid', use_bias=True,
+                       kernel_initializer='glorot_uniform', bias_initializer='zeros')(net_output)
+    model = Model(net_input, net_output)
 
     try:
-        optimizer = getattr(keras.optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy', 'accuracy'])
+        optimizer = getattr(optimizers, optimizer)(lr=learning_rate)
+        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
 
 
 def get_model_generator(model_type):
-    if model_type is Model.MLP:
+    if model_type is ModelType.MLP:
         return generate_mlp_model
-    if model_type is Model.CNN:
+    if model_type is ModelType.CNN:
         return generate_cnn_model
-    if model_type is Model.LSTM:
+    if model_type is ModelType.LSTM:
         return generate_lstm_model
-    if model_type is Model.CNN_LSTM:
+    if model_type is ModelType.CNN_LSTM:
         return generate_cnn_lstm_model
     raise ValueError(f'Model type {model_type} not found!')
 
 
-def duplicate_data(data, duplicate_coef=None):
+def duplicate_data(input_data, duplicate_coef=None):
     coefs = {}
-    unique, counts = np.unique(data[:, -1], return_counts=True)
+    unique, counts = np.unique(input_data[:, -1], return_counts=True)
     for j in range(len(unique)):
         coefs[unique[j]] = counts[j]
     maximum = float(np.max(list(coefs.values())))
@@ -196,9 +206,9 @@ def duplicate_data(data, duplicate_coef=None):
             coefs[key] = int(np.floor(maximum / float(coefs[key])))
         else:
             coefs[key] = 1 if coefs[key] == maximum else duplicate_coef
-    repeats = [coefs[label] for label in data[:, -1]]
-    data = np.repeat(data, repeats, axis=0)
-    return data
+    repeats = [coefs[label] for label in input_data[:, -1]]
+    input_data = np.repeat(input_data, repeats, axis=0)
+    return input_data
 
 
 def simplify_labels(labels):
@@ -209,12 +219,12 @@ def simplify_labels(labels):
     return labels
 
 
-def normalize_data(data):
-    std_scaler = preprocessing.StandardScaler().fit(data)
-    return std_scaler.transform(data)
+def normalize_data(input_data):
+    std_scaler = preprocessing.StandardScaler().fit(input_data)
+    return std_scaler.transform(input_data)
 
 
-def train_model(data,
+def train_model(input_data,
                 model_type,
                 train_size_percent=0.8,
                 shuffle=True,
@@ -229,8 +239,8 @@ def train_model(data,
                 epochs=100):
     """
     Funkce k natrenovani a testovani zvoleneho modelu
-    :param ndarray data: Data k trenovani a testovani modelu, list tuplu ve tvaru (nazev souboru, data)
-    :param Model model_type: Nazev modelu
+    :param ndarray input_data: Data k trenovani a testovani modelu, list tuplu ve tvaru (nazev souboru, data)
+    :param ModelType model_type: Nazev modelu
     :param float train_size_percent: Velikost trenovacich dat
     :param bool shuffle: Michani dat
     :param bool normalize: Normalizace dat
@@ -243,22 +253,23 @@ def train_model(data,
     :param int epochs: Pocet opakovani trenovani
     :param float learning_rate: Zvoleny learning rate
     """
-    data = np.concatenate(tuple([d[1] for d in data]), axis=0)
+    input_data = np.concatenate(tuple([d[1] for d in input_data]), axis=0)
     if simplify:
-        data[:, -1] = simplify_labels(data[:, -1])
+        input_data[:, -1] = simplify_labels(input_data[:, -1])
     if normalize:
-        data[:, 0:(data.shape[1] - 1)] = normalize_data(data[:, 0:(data.shape[1] - 1)])  # Normalizace dat
+        # Normalizace dat
+        input_data[:, 0:(input_data.shape[1] - 1)] = normalize_data(input_data[:, 0:(input_data.shape[1] - 1)])
     if duplicate:
-        data = duplicate_data(data, duplicate_coef)
+        input_data = duplicate_data(input_data, duplicate_coef)
     if use_label:
         reduce_param = 0
     else:
         reduce_param = 1
-    Y = encode_labels(data[:, -1])  # Zakodovani labelu ze stringu na int
+    Y = encode_labels(input_data[:, -1])  # Zakodovani labelu ze stringu na int
     class_weights = get_class_weights(Y, use_weights)
-    data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
-    Y = keras.utils.to_categorical(Y)  # Prevod labelu na one-hot kodovani
-    trainX, trainY, testX, testY = split_data(data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
+    input_data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
+    Y = to_categorical(Y)  # Prevod labelu na one-hot kodovani
+    trainX, trainY, testX, testY = split_data(input_data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
     trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
     testX = testX[:, 0:(testX.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
 
@@ -288,20 +299,20 @@ def train_model(data,
         f.write(json.dumps(params, ensure_ascii=False))
 
     try:
-        keras.utils.plot_model(model, to_file=graph_folder + 'model.png', show_shapes=True)
+        plot_model(model, to_file=graph_folder + 'model.png', show_shapes=True)
     except:
         print("GraphViz not found in PATH variable")
-    tb_callback = keras.callbacks.TensorBoard(log_dir=graph_folder, histogram_freq=0,
-                                              write_graph=True, write_images=True)
-    model.fit(trainX, trainY, epochs=epochs, batch_size=10000, validation_data=(testX, testY), shuffle=shuffle,
-              callbacks=[tb_callback], class_weight=class_weights)
+    tb_callback = TensorBoard(log_dir=graph_folder, histogram_freq=0,
+                              write_graph=True, write_images=True)
+    model.fit(trainX, trainY, epochs=epochs, batch_size=1000, validation_data=(testX, testY), shuffle=shuffle,
+              callbacks=[tb_callback], class_weight=class_weights, verbose=2)
     model_json = model.to_json()
     with open(graph_folder + 'model.json', 'w') as json_file:
         json_file.write(model_json)
     model.save_weights(graph_folder + 'model.h5')
 
 
-def svm_model(data,
+def svm_model(input_data,
               train_size_percent=0.8,
               shuffle=True,
               normalize=True,
@@ -310,24 +321,60 @@ def svm_model(data,
               duplicate_coef=None,
               use_weights=False,
               simplify=True):
-    data = np.concatenate(tuple([d[1] for d in data]), axis=0)
+    input_data = np.concatenate(tuple([d[1] for d in input_data]), axis=0)
     if simplify:
-        data[:, -1] = simplify_labels(data[:, -1])
+        input_data[:, -1] = simplify_labels(input_data[:, -1])
     if normalize:
-        data[:, 0:(data.shape[1] - 1)] = normalize_data(data[:, 0:(data.shape[1] - 1)])  # Normalizace dat
+        # Normalizace dat
+        input_data[:, 0:(input_data.shape[1] - 1)] = normalize_data(input_data[:, 0:(input_data.shape[1] - 1)])
     if duplicate:
-        data = duplicate_data(data, duplicate_coef)
+        input_data = duplicate_data(input_data, duplicate_coef)
     if use_label:
         reduce_param = 0
     else:
         reduce_param = 1
-    Y = encode_labels(data[:, -1])  # Zakodovani labelu ze stringu na int
+    Y = encode_labels(input_data[:, -1])  # Zakodovani labelu ze stringu na int
     class_weights = get_class_weights(Y, use_weights)
-    data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
-    trainX, trainY, testX, testY = split_data(data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
+    input_data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
+    trainX, trainY, testX, testY = split_data(input_data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
     trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
     testX = testX[:, 0:(testX.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
-    clf = svm.SVC(gamma='scale', decision_function_shape='ovo', class_weight=class_weights, verbose=True, max_iter=10000)
+    clf = svm.SVC(gamma='scale', decision_function_shape='ovo', class_weight=class_weights, verbose=True, max_iter=1000)
+    print('Starting training')
+    clf.fit(trainX, trainY)
+    print('Trained')
+    s = clf.score(testX, testY)
+    print(f'Test result: {s}')
+
+
+def forest_model(input_data,
+                 train_size_percent=0.8,
+                 shuffle=True,
+                 normalize=True,
+                 use_label=False,
+                 duplicate=True,
+                 duplicate_coef=None,
+                 use_weights=False,
+                 simplify=True):
+    input_data = np.concatenate(tuple([d[1] for d in input_data]), axis=0)
+    if simplify:
+        input_data[:, -1] = simplify_labels(input_data[:, -1])
+    if normalize:
+        # Normalizace dat
+        input_data[:, 0:(input_data.shape[1] - 1)] = normalize_data(input_data[:, 0:(input_data.shape[1] - 1)])
+    if duplicate:
+        input_data = duplicate_data(input_data, duplicate_coef)
+    if use_label:
+        reduce_param = 0
+    else:
+        reduce_param = 1
+    Y = encode_labels(input_data[:, -1])  # Zakodovani labelu ze stringu na int
+    class_weights = get_class_weights(Y, use_weights)
+    input_data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
+    trainX, trainY, testX, testY = split_data(input_data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
+    trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
+    testX = testX[:, 0:(testX.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
+    clf = RandomForestClassifier(n_estimators=100, max_depth=10, class_weight=class_weights, verbose=1)
     print('Starting training')
     clf.fit(trainX, trainY)
     print('Trained')
@@ -337,65 +384,74 @@ def svm_model(data,
 
 if __name__ == "__main__":
     data = load_data(DATA_FOLDER, [str(i) + '.csv' for i in range(1, 9)], 'GL')
-    svm_model(data=np.array(data, copy=False),
+    '''forest_model(data=np.array(data, copy=False),
+                 train_size_percent=0.8,
+                 shuffle=True,
+                 normalize=True,
+                 use_label=False,
+                 duplicate=True,
+                 duplicate_coef=None,
+                 use_weights=False,
+                 simplify=True)'''
+    '''svm_model(data=np.array(data, copy=False),
               train_size_percent=0.8,
               shuffle=True,
               normalize=True,
               use_label=False,
-              duplicate=False,
+              duplicate=True,
               duplicate_coef=None,
               use_weights=False,
-              simplify=True)
-    train_model(data=np.array(data, copy=False),
-                model_type=Model.MLP,
+              simplify=True)'''
+    train_model(input_data=np.array(data, copy=False),
+                model_type=ModelType.MLP,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=False,
+                normalize=True,
                 use_label=False,
                 duplicate=False,
                 duplicate_coef=None,
                 use_weights=True,
                 simplify=True,
-                optimizer='Adam',
+                optimizer='SGD',
                 learning_rate=0.1,
-                epochs=50)
-    train_model(data=np.array(data, copy=False),
-                model_type=Model.CNN,
+                epochs=100)
+    '''train_model(input_data=np.array(data, copy=False),
+                model_type=ModelType.CNN,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=False,
+                normalize=True,
                 use_label=False,
                 duplicate=False,
                 duplicate_coef=None,
                 use_weights=True,
                 simplify=True,
-                optimizer='Adam',
+                optimizer='SGD',
                 learning_rate=0.1,
-                epochs=50)
-    train_model(data=np.array(data, copy=False),
-                model_type=Model.LSTM,
+                epochs=100)'''
+    '''train_model(input_data=np.array(data, copy=False),
+                model_type=ModelType.LSTM,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=False,
+                normalize=True,
                 use_label=False,
                 duplicate=False,
                 duplicate_coef=None,
                 use_weights=True,
                 simplify=True,
-                optimizer='Adam',
+                optimizer='SGD',
                 learning_rate=0.1,
-                epochs=50)
-    train_model(data=np.array(data, copy=False),
-                model_type=Model.CNN_LSTM,
+                epochs=100)'''
+    '''train_model(input_data=np.array(data, copy=False),
+                model_type=ModelType.CNN_LSTM,
                 train_size_percent=0.8,
                 shuffle=True,
-                normalize=False,
+                normalize=True,
                 use_label=False,
                 duplicate=False,
                 duplicate_coef=None,
                 use_weights=True,
                 simplify=True,
-                optimizer='Adam',
+                optimizer='SGD',
                 learning_rate=0.1,
-                epochs=50)
+                epochs=50)'''
     print("Konec")
