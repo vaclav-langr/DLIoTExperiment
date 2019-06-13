@@ -99,7 +99,7 @@ def generate_mlp_model(trainX, trainY, testX, testY, optimizer, learning_rate):
 
     try:
         optimizer_var = getattr(optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer_var, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+        model.compile(optimizer=optimizer_var, loss='binary_crossentropy', metrics=['binary_accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -127,7 +127,7 @@ def generate_cnn_model(trainX, trainY, testX, testY, optimizer, learning_rate):
 
     try:
         optimizer = getattr(optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -151,7 +151,7 @@ def generate_lstm_model(trainX, trainY, testX, testY, optimizer, learning_rate):
 
     try:
         optimizer = getattr(optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -177,7 +177,7 @@ def generate_cnn_lstm_model(trainX, trainY, testX, testY, optimizer, learning_ra
 
     try:
         optimizer = getattr(optimizers, optimizer)(lr=learning_rate)
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy'])
         return model, trainX, trainY, testX, testY
     except AttributeError:
         raise ValueError(f'Optimizer {optimizer} not found!')
@@ -268,7 +268,7 @@ def train_model(input_data,
     Y = encode_labels(input_data[:, -1])  # Zakodovani labelu ze stringu na int
     class_weights = get_class_weights(Y, use_weights)
     input_data[:, -1] = Y  # Nahrazeni hodnot v puvodnim poli
-    Y = to_categorical(Y)  # Prevod labelu na one-hot kodovani
+    #  Y = to_categorical(Y)  # Prevod labelu na one-hot kodovani
     trainX, trainY, testX, testY = split_data(input_data, Y, train_size_percent=train_size_percent, shuffle=shuffle)
     trainX = trainX[:, 0:(trainX.shape[1] - reduce_param)]  # Vyber priznaku pro trenovani
     testX = testX[:, 0:(testX.shape[1] - reduce_param)]  # Vyber priznaku pro testovani
@@ -402,7 +402,7 @@ if __name__ == "__main__":
               duplicate_coef=None,
               use_weights=False,
               simplify=True)'''
-    train_model(input_data=np.array(data, copy=False),
+    '''train_model(input_data=np.array(data, copy=False),
                 model_type=ModelType.MLP,
                 train_size_percent=0.8,
                 shuffle=True,
@@ -414,7 +414,7 @@ if __name__ == "__main__":
                 simplify=True,
                 optimizer='SGD',
                 learning_rate=0.1,
-                epochs=100)
+                epochs=100)'''
     '''train_model(input_data=np.array(data, copy=False),
                 model_type=ModelType.CNN,
                 train_size_percent=0.8,
@@ -438,10 +438,10 @@ if __name__ == "__main__":
                 duplicate_coef=None,
                 use_weights=True,
                 simplify=True,
-                optimizer='SGD',
+                optimizer='Adam',
                 learning_rate=0.1,
                 epochs=100)'''
-    '''train_model(input_data=np.array(data, copy=False),
+    train_model(input_data=np.array(data, copy=False),
                 model_type=ModelType.CNN_LSTM,
                 train_size_percent=0.8,
                 shuffle=True,
@@ -451,7 +451,7 @@ if __name__ == "__main__":
                 duplicate_coef=None,
                 use_weights=True,
                 simplify=True,
-                optimizer='SGD',
+                optimizer='Adam',
                 learning_rate=0.1,
-                epochs=50)'''
+                epochs=50)
     print("Konec")
